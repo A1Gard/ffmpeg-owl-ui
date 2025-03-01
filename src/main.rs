@@ -2,16 +2,18 @@ mod font_installer;
 mod remixicon;
 
 use iced::widget::{button, column, container, row, text, Container};
-use iced::window;
 use iced::{Center, Fill, Font, Task, Theme};
 use remixicon::{remix_init, ri_icon};
+use std::io;
+use iced::Alignment::End;
 
 fn theme(state: &Controller) -> Theme {
     print!("{}", state.value.to_string());
     Theme::CatppuccinMocha
 }
 
-pub fn main() -> iced::Result {
+#[tokio::main]
+pub async fn main() -> iced::Result {
     // install icon font
     let font_path = "assets/fonts/remixicon.ttf"; // Path to the font file
     match font_installer::install_font(font_path) {
@@ -31,9 +33,10 @@ pub fn main() -> iced::Result {
 struct Controller {
     value: i64,
     source: String,
+    dest: String,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum Message {
     Start,
     Mute,
@@ -45,50 +48,84 @@ enum Message {
     Subtitle,
     Watermark,
     SelectInputVideo,
+    InputVideoOpened(Result<String, String>),
+    SelectOutputVideo,
+    OutputVideoOpened(Result<String, String>),
 }
 
 impl Controller {
-
     fn new() -> (Self, Task<Message>) {
-        let start_message =  { Message::Start };
-        (
-            Self::default(),
-            Task::done(start_message),
-        )
+        let start_message = { Message::Start };
+        (Self::default(), Task::done(start_message))
     }
 
-    fn update(&mut self, message: Message) {
+    fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Start => {
                 self.source = "-".to_string();
+                Task::none()
             }
-            Message::Mute => {
-                self.value += 1;
-            }
-            Message::Rotate => {
-                self.value -= 1;
-            }
-            Message::ReplaceSound => {
-                self.value -= 1;
-            }
-            Message::Crop => {
-                self.value -= 1;
-            }
-            Message::Compress => {
-                self.value -= 1;
-            }
-            Message::Resize => {
-                self.value -= 1;
-            }
-            Message::Subtitle => {
-                self.value -= 1;
-            }
-            Message::Watermark => {
-                self.value -= 1;
-            }
+            Message::Mute => Task::none(),
+            Message::Rotate => Task::none(),
+            Message::ReplaceSound => Task::none(),
+            Message::Crop => Task::none(),
+            Message::Compress => Task::none(),
+            Message::Resize => Task::none(),
+            Message::Subtitle => Task::none(),
+            Message::Watermark => Task::none(),
 
             Message::SelectInputVideo => {
-                self.source = "-".to_string();
+                println!("Select input video");
+                // tokio::spawn(async {
+                //     match open_file().await {
+                //         Ok(file_path) => {
+                //             print!("{}", file_path);
+                //         }
+                //         Err(e) => {
+                //             eprintln!("Error selecting file: {}", e); // Handle the error (optional)
+                //             // Do nothing if the file selection failed
+                //         }
+                //     }
+                // });
+
+                Task::perform(open_file(&["mp4", "mkv"]), Message::InputVideoOpened)
+            }
+            Message::InputVideoOpened(result) => {
+                match result {
+                    Ok(file_path) => {
+                        self.source = file_path;
+                    }
+                    Err(e) => {
+                        eprintln!("Error selecting file: {}", e); // Handle the error (optional)
+                                                                  // Do nothing if the file selection failed
+                    }
+                }
+
+                Task::none()
+            }
+            Message::SelectOutputVideo => {
+                println!("Select out video");
+
+                Task::perform(save_file(&["mp4", "mkv"]), Message::OutputVideoOpened)
+            }
+            Message::OutputVideoOpened(result) => {
+                match result {
+                    Ok(file_path) => {
+                        // Check if the file_path ends with ".mp4"
+                        if !file_path.ends_with(".mp4") {
+                            // Append ".mp4" to the file_path
+                            self.dest = format!("{}.mp4", file_path);
+                        } else {
+                            self.dest = file_path;
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Error selecting file: {}", e); // Handle the error (optional)
+                                                                  // Do nothing if the file selection failed
+                    }
+                }
+
+                Task::none()
             }
         }
     }
@@ -224,12 +261,18 @@ impl Controller {
             ])
             .padding(15),
             container(
-                column![row![
-                    text("Input video: "),
+                column![
+                    row![
+                    text("Input video: ").width(200),
                     button("Choose source").on_press(Message::SelectInputVideo),
-                    text(self.source.clone())
+                    container(text(self.source.clone())).align_x(End).width(Fill).padding(7),
+                ].align_y(Center),
+                    row![
+                    text("Output video: ").width(200),
+                    button("Choose destination").on_press(Message::SelectOutputVideo),
+                    container(text(self.dest.clone())).align_x(End).width(Fill).padding(7),
+                ].align_y(Center)
                 ]
-                .align_y(Center)]
                 .align_x(Center)
             )
             .padding(15)
@@ -241,4 +284,57 @@ impl Controller {
         .center_y(Fill)
         .align_x(Center)
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum Error {
+    DialogClosed,
+    IoError(io::ErrorKind),
+}
+
+async fn open_file(support_ext:  &[impl ToString]) -> Result<String, String> {
+    println!("Opening file...");
+    let picked_file = rfd::AsyncFileDialog::new()
+        .set_title("Open file...")
+        .add_filter("Supported", support_ext)
+        .add_filter("All files", &["*"])
+        .pick_file()
+        .await;
+
+    // Handle the case where the user cancels the dialog
+    let picked_file = match picked_file {
+        Some(file) => file,
+        None => return Err("No file was selected.".to_string()),
+    };
+
+    // Handle the case where the path is not valid
+    let path = match picked_file.path().to_str() {
+        Some(path) => path,
+        None => return Err("File path is not valid UTF-8.".to_string()),
+    };
+
+    Ok(path.to_string())
+}
+async fn save_file(support_ext:  &[impl ToString]) -> Result<String, String> {
+    println!("Opening file...");
+    let picked_file = rfd::AsyncFileDialog::new()
+        .set_title("Save file...")
+        .add_filter("Supported", support_ext)
+        .add_filter("All files", &["*"])
+        .save_file()
+        .await;
+
+    // Handle the case where the user cancels the dialog
+    let picked_file = match picked_file {
+        Some(file) => file,
+        None => return Err("No file was selected.".to_string()),
+    };
+
+    // Handle the case where the path is not valid
+    let path = match picked_file.path().to_str() {
+        Some(path) => path,
+        None => return Err("File path is not valid UTF-8.".to_string()),
+    };
+
+    Ok(path.to_string())
 }

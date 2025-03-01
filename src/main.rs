@@ -1,7 +1,7 @@
 mod font_installer;
 mod remixicon;
 
-use iced::widget::{button, column, container, row, text, Container};
+use iced::widget::{button, column, container, horizontal_space, row, text, Button, Container};
 use iced::{Center, Fill, Font, Task, Theme};
 use remixicon::{remix_init, ri_icon};
 use std::io;
@@ -34,6 +34,8 @@ struct Controller {
     value: i64,
     source: String,
     dest: String,
+    can_logo:bool,
+    logo_input: String,
 }
 
 #[derive(Debug, Clone)]
@@ -51,6 +53,9 @@ enum Message {
     InputVideoOpened(Result<String, String>),
     SelectOutputVideo,
     OutputVideoOpened(Result<String, String>),
+    SelectLogo,
+    LogoOpened(Result<String, String>),
+
 }
 
 impl Controller {
@@ -59,10 +64,18 @@ impl Controller {
         (Self::default(), Task::done(start_message))
     }
 
+    fn can_logo(&self) -> bool {
+        self.can_logo
+    }
+
+
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Start => {
                 self.source = "-".to_string();
+                self.dest = "-".to_string();
+                self.logo_input = "-".to_string();
+                self.can_logo = false;
                 Task::none()
             }
             Message::Mute => Task::none(),
@@ -72,7 +85,10 @@ impl Controller {
             Message::Compress => Task::none(),
             Message::Resize => Task::none(),
             Message::Subtitle => Task::none(),
-            Message::Watermark => Task::none(),
+            Message::Watermark => {
+                self.can_logo  = true;
+                Task::none()
+            },
 
             Message::SelectInputVideo => {
                 println!("Select input video");
@@ -98,6 +114,24 @@ impl Controller {
                     Err(e) => {
                         eprintln!("Error selecting file: {}", e); // Handle the error (optional)
                                                                   // Do nothing if the file selection failed
+                    }
+                }
+
+                Task::none()
+            }
+            Message::SelectLogo => {
+                println!("Select out video");
+
+                Task::perform(save_file(&["png", "jpg"]), Message::OutputVideoOpened)
+            }
+            Message::LogoOpened(result) => {
+                match result {
+                    Ok(file_path) => {
+                        self.logo_input = file_path;
+                    }
+                    Err(e) => {
+                        eprintln!("Error selecting file: {}", e); // Handle the error (optional)
+                        // Do nothing if the file selection failed
                     }
                 }
 
@@ -132,6 +166,20 @@ impl Controller {
 
     fn view(&self) -> Container<Message> {
         // &self.update(Message::Start);
+
+
+
+        let controls =
+            column![]
+                .push(horizontal_space())
+                .push_maybe(self.can_logo().then(|| {
+                    row![
+                        text("Logo input: ").width(200),
+                        button("Choose logo").on_press(Message::SelectLogo),
+                        container(text(self.logo_input.clone())).align_x(End).width(Fill).padding(7),
+                    ]
+                }));
+
 
         container(column![
             container(column![
@@ -271,9 +319,13 @@ impl Controller {
                     text("Output video: ").width(200),
                     button("Choose destination").on_press(Message::SelectOutputVideo),
                     container(text(self.dest.clone())).align_x(End).width(Fill).padding(7),
-                ].align_y(Center)
+                ].align_y(Center),
+                   container(
+                        controls
+                    )
                 ]
                 .align_x(Center)
+                .spacing(7)
             )
             .padding(15)
             .height(Fill),
@@ -337,4 +389,8 @@ async fn save_file(support_ext:  &[impl ToString]) -> Result<String, String> {
     };
 
     Ok(path.to_string())
+}
+
+fn padded_button<Message: Clone>(label: &str) -> Button<'_, Message> {
+    button(text(label)).padding([12, 24])
 }

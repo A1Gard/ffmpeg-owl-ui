@@ -1,11 +1,13 @@
 mod font_installer;
 mod remixicon;
 
-use iced::widget::{button, column, container, horizontal_space, row, text, Button, Container};
+use iced::widget::{
+    button, column, container, horizontal_space, progress_bar, row, text, Button, Container,
+};
+use iced::Alignment::End;
 use iced::{Center, Fill, Font, Task, Theme};
 use remixicon::{remix_init, ri_icon};
 use std::io;
-use iced::Alignment::End;
 
 fn theme(state: &Controller) -> Theme {
     print!("{}", state.value.to_string());
@@ -34,8 +36,9 @@ struct Controller {
     value: i64,
     source: String,
     dest: String,
-    can_logo:bool,
+    can_logo: bool,
     logo_input: String,
+    progress: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -49,13 +52,13 @@ enum Message {
     Resize,
     Subtitle,
     Watermark,
+    doIt,
     SelectInputVideo,
     InputVideoOpened(Result<String, String>),
     SelectOutputVideo,
     OutputVideoOpened(Result<String, String>),
     SelectLogo,
     LogoOpened(Result<String, String>),
-
 }
 
 impl Controller {
@@ -67,7 +70,6 @@ impl Controller {
     fn can_logo(&self) -> bool {
         self.can_logo
     }
-
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
@@ -86,7 +88,11 @@ impl Controller {
             Message::Resize => Task::none(),
             Message::Subtitle => Task::none(),
             Message::Watermark => {
-                self.can_logo  = true;
+                self.can_logo = true;
+                Task::none()
+            }
+            Message::doIt => {
+                self.progress = 15.7;
                 Task::none()
             },
 
@@ -131,7 +137,7 @@ impl Controller {
                     }
                     Err(e) => {
                         eprintln!("Error selecting file: {}", e); // Handle the error (optional)
-                        // Do nothing if the file selection failed
+                                                                  // Do nothing if the file selection failed
                     }
                 }
 
@@ -167,19 +173,18 @@ impl Controller {
     fn view(&self) -> Container<Message> {
         // &self.update(Message::Start);
 
-
-
-        let controls =
-            column![]
-                .push(horizontal_space())
-                .push_maybe(self.can_logo().then(|| {
-                    row![
-                        text("Logo input: ").width(200),
-                        button("Choose logo").on_press(Message::SelectLogo),
-                        container(text(self.logo_input.clone())).align_x(End).width(Fill).padding(7),
-                    ]
-                }));
-
+        let controls = column![]
+            .push(horizontal_space())
+            .push_maybe(self.can_logo().then(|| {
+                row![
+                    text("Logo input: ").width(200),
+                    button("Choose logo").on_press(Message::SelectLogo),
+                    container(text(self.logo_input.clone()))
+                        .align_x(End)
+                        .width(Fill)
+                        .padding(7),
+                ]
+            }));
 
         container(column![
             container(column![
@@ -311,24 +316,36 @@ impl Controller {
             container(
                 column![
                     row![
-                    text("Input video: ").width(200),
-                    button("Choose source").on_press(Message::SelectInputVideo),
-                    container(text(self.source.clone())).align_x(End).width(Fill).padding(7),
-                ].align_y(Center),
+                        text("Input video: ").width(200),
+                        button("Choose source").on_press(Message::SelectInputVideo),
+                        container(text(self.source.clone()))
+                            .align_x(End)
+                            .width(Fill)
+                            .padding(7),
+                    ]
+                    .align_y(Center),
                     row![
-                    text("Output video: ").width(200),
-                    button("Choose destination").on_press(Message::SelectOutputVideo),
-                    container(text(self.dest.clone())).align_x(End).width(Fill).padding(7),
-                ].align_y(Center),
-                   container(
-                        controls
-                    )
+                        text("Output video: ").width(200),
+                        button("Choose destination").on_press(Message::SelectOutputVideo),
+                        container(text(self.dest.clone()))
+                            .align_x(End)
+                            .width(Fill)
+                            .padding(7),
+                    ]
+                    .align_y(Center),
+                    container(controls)
                 ]
                 .align_x(Center)
                 .spacing(7)
             )
             .padding(15)
             .height(Fill),
+            container(column![
+                progress_bar(0.0..=100.0, self.progress.clone()),
+                button(container(
+                    text("Do it!")
+                ).width(Fill).align_x(Center)).on_press(Message::doIt)
+            ].spacing(15)).padding(15)
         ])
         .width(Fill)
         .center_x(Fill)
@@ -344,7 +361,7 @@ pub enum Error {
     IoError(io::ErrorKind),
 }
 
-async fn open_file(support_ext:  &[impl ToString]) -> Result<String, String> {
+async fn open_file(support_ext: &[impl ToString]) -> Result<String, String> {
     println!("Opening file...");
     let picked_file = rfd::AsyncFileDialog::new()
         .set_title("Open file...")
@@ -367,7 +384,7 @@ async fn open_file(support_ext:  &[impl ToString]) -> Result<String, String> {
 
     Ok(path.to_string())
 }
-async fn save_file(support_ext:  &[impl ToString]) -> Result<String, String> {
+async fn save_file(support_ext: &[impl ToString]) -> Result<String, String> {
     println!("Opening file...");
     let picked_file = rfd::AsyncFileDialog::new()
         .set_title("Save file...")

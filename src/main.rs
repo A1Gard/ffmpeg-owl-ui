@@ -2,16 +2,14 @@ mod font_installer;
 mod remixicon;
 
 use iced::widget::{button, column, container, row, text, Container};
-use iced::{Center, Fill, Font, Theme};
+use iced::window;
+use iced::{Center, Fill, Font, Task, Theme};
 use remixicon::{remix_init, ri_icon};
 
 fn theme(state: &Controller) -> Theme {
     print!("{}", state.value.to_string());
     Theme::CatppuccinMocha
 }
-
-
-
 
 pub fn main() -> iced::Result {
     // install icon font
@@ -24,18 +22,15 @@ pub fn main() -> iced::Result {
     // init icon font
     remix_init();
 
-
     iced::application("FFmpeg owl ui", Controller::update, Controller::view)
         .theme(theme)
-        .run()
+        .run_with(Controller::new)
 }
-
 
 #[derive(Default)]
 struct Controller {
     value: i64,
     source: String,
-    initialized: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -54,10 +49,16 @@ enum Message {
 
 impl Controller {
 
+    fn new() -> (Self, Task<Message>) {
+        let start_message =  { Message::Start };
+        (
+            Self::default(),
+            Task::done(start_message),
+        )
+    }
 
     fn update(&mut self, message: Message) {
         match message {
-
             Message::Start => {
                 self.source = "-".to_string();
             }
@@ -89,19 +90,10 @@ impl Controller {
             Message::SelectInputVideo => {
                 self.source = "-".to_string();
             }
-
-        }
-
-        // Handle initial value
-        if !self.initialized {
-            self.source = "-".to_string();
-            self.initialized = true; // Mark as initialized
         }
     }
 
     fn view(&self) -> Container<Message> {
-
-
         // &self.update(Message::Start);
 
         container(column![
@@ -232,15 +224,16 @@ impl Controller {
             ])
             .padding(15),
             container(
-                column![
-                    row![
-                        text("Input video: "),
-                        button("Choose source").on_press(Message::SelectInputVideo),
-                        text(self.source.clone())
-
-                    ].align_y(Center)
-                ].align_x(Center)
-            ).padding(15).height(Fill),
+                column![row![
+                    text("Input video: "),
+                    button("Choose source").on_press(Message::SelectInputVideo),
+                    text(self.source.clone())
+                ]
+                .align_y(Center)]
+                .align_x(Center)
+            )
+            .padding(15)
+            .height(Fill),
         ])
         .width(Fill)
         .center_x(Fill)

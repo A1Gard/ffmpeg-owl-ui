@@ -2,12 +2,13 @@ mod font_installer;
 mod remixicon;
 
 use iced::widget::{
-    button, column, container, horizontal_space, progress_bar, row, text, Button, Container,
+    button, column, container, horizontal_space, progress_bar, row, text, Container,
 };
 use iced::Alignment::End;
-use iced::{Center, Fill, Font, Task, Theme};
-use remixicon::{remix_init, ri_icon};
+use iced::{Center, Fill, Task, Theme};
+use remixicon::{remix_init};
 use std::io;
+use crate::remixicon::remix_icon;
 
 fn theme(state: &Controller) -> Theme {
     print!("{}", state.value.to_string());
@@ -52,7 +53,7 @@ enum Message {
     Resize,
     Subtitle,
     Watermark,
-    doIt,
+    DoIt,
     SelectInputVideo,
     InputVideoOpened(Result<String, String>),
     SelectOutputVideo,
@@ -91,7 +92,7 @@ impl Controller {
                 self.can_logo = true;
                 Task::none()
             }
-            Message::doIt => {
+            Message::DoIt => {
                 self.progress = 15.7;
                 Task::none()
             },
@@ -126,9 +127,9 @@ impl Controller {
                 Task::none()
             }
             Message::SelectLogo => {
-                println!("Select out video");
+                println!("Select logo");
 
-                Task::perform(save_file(&["png", "jpg"]), Message::OutputVideoOpened)
+                Task::perform(open_file(&["png", "jpg"]), Message::LogoOpened)
             }
             Message::LogoOpened(result) => {
                 match result {
@@ -173,8 +174,29 @@ impl Controller {
     fn view(&self) -> Container<Message> {
         // &self.update(Message::Start);
 
-        let controls = column![]
-            .push(horizontal_space())
+        let controls = column![].spacing(7)
+            .push(
+                row![
+                        text("Input video: ").width(200),
+                        button("Choose source").on_press(Message::SelectInputVideo),
+                        container(text(self.source.clone()))
+                            .align_x(End)
+                            .width(Fill)
+                            .padding(7),
+                    ]
+                    .align_y(Center),
+            )
+            .push(
+                row![
+                        text("Output video: ").width(200),
+                        button("Choose destination").on_press(Message::SelectOutputVideo),
+                        container(text(self.dest.clone()))
+                            .align_x(End)
+                            .width(Fill)
+                            .padding(7),
+                    ]
+                    .align_y(Center),
+            )
             .push_maybe(self.can_logo().then(|| {
                 row![
                     text("Logo input: ").width(200),
@@ -183,7 +205,7 @@ impl Controller {
                         .align_x(End)
                         .width(Fill)
                         .padding(7),
-                ]
+                ].align_y(Center)
             }));
 
         container(column![
@@ -192,8 +214,7 @@ impl Controller {
                     row![
                         button(
                             container(column![
-                                text(ri_icon("ri-volume-mute-line"))
-                                    .font(Font::with_name("remixicon"))
+                                remix_icon("ri-volume-mute-line")
                                     .size(35)
                                     .width(Fill)
                                     .align_x(Center),
@@ -206,8 +227,7 @@ impl Controller {
                         .on_press(Message::Mute),
                         button(
                             container(column![
-                                text(ri_icon("ri-clockwise-2-line"))
-                                    .font(Font::with_name("remixicon"))
+                                remix_icon("ri-clockwise-2-line")
                                     .size(35)
                                     .width(Fill)
                                     .align_x(Center),
@@ -220,8 +240,7 @@ impl Controller {
                         .on_press(Message::Rotate),
                         button(
                             container(column![
-                                text(ri_icon("ri-voiceprint-fill"))
-                                    .font(Font::with_name("remixicon"))
+                                remix_icon("ri-voiceprint-fill")
                                     .size(35)
                                     .width(Fill)
                                     .align_x(Center),
@@ -234,8 +253,7 @@ impl Controller {
                         .on_press(Message::ReplaceSound),
                         button(
                             container(column![
-                                text(ri_icon("ri-crop-line"))
-                                    .font(Font::with_name("remixicon"))
+                                remix_icon("ri-crop-line")
                                     .size(35)
                                     .width(Fill)
                                     .align_x(Center),
@@ -254,8 +272,7 @@ impl Controller {
                     row![
                         button(
                             container(column![
-                                text(ri_icon("ri-file-zip-line"))
-                                    .font(Font::with_name("remixicon"))
+                                remix_icon("ri-file-zip-line")
                                     .size(35)
                                     .width(Fill)
                                     .align_x(Center),
@@ -268,8 +285,7 @@ impl Controller {
                         .on_press(Message::Compress),
                         button(
                             container(column![
-                                text(ri_icon("ri-expand-diagonal-line"))
-                                    .font(Font::with_name("remixicon"))
+                                remix_icon("ri-expand-diagonal-line")
                                     .size(35)
                                     .width(Fill)
                                     .align_x(Center),
@@ -282,8 +298,7 @@ impl Controller {
                         .on_press(Message::Resize),
                         button(
                             container(column![
-                                text(ri_icon("ri-text-snippet"))
-                                    .font(Font::with_name("remixicon"))
+                                remix_icon("ri-text-snippet")
                                     .size(35)
                                     .width(Fill)
                                     .align_x(Center),
@@ -296,8 +311,7 @@ impl Controller {
                         .on_press(Message::Subtitle),
                         button(
                             container(column![
-                                text(ri_icon("ri-image-add-line"))
-                                    .font(Font::with_name("remixicon"))
+                                remix_icon("ri-image-add-line")
                                     .size(35)
                                     .width(Fill)
                                     .align_x(Center),
@@ -315,25 +329,9 @@ impl Controller {
             .padding(15),
             container(
                 column![
-                    row![
-                        text("Input video: ").width(200),
-                        button("Choose source").on_press(Message::SelectInputVideo),
-                        container(text(self.source.clone()))
-                            .align_x(End)
-                            .width(Fill)
-                            .padding(7),
-                    ]
-                    .align_y(Center),
-                    row![
-                        text("Output video: ").width(200),
-                        button("Choose destination").on_press(Message::SelectOutputVideo),
-                        container(text(self.dest.clone()))
-                            .align_x(End)
-                            .width(Fill)
-                            .padding(7),
-                    ]
-                    .align_y(Center),
-                    container(controls)
+                    horizontal_space(),
+                    container(controls),
+                    horizontal_space(),
                 ]
                 .align_x(Center)
                 .spacing(7)
@@ -344,7 +342,7 @@ impl Controller {
                 progress_bar(0.0..=100.0, self.progress.clone()),
                 button(container(
                     text("Do it!")
-                ).width(Fill).align_x(Center)).on_press(Message::doIt)
+                ).width(Fill).align_x(Center)).on_press(Message::DoIt)
             ].spacing(15)).padding(15)
         ])
         .width(Fill)
@@ -408,6 +406,4 @@ async fn save_file(support_ext: &[impl ToString]) -> Result<String, String> {
     Ok(path.to_string())
 }
 
-fn padded_button<Message: Clone>(label: &str) -> Button<'_, Message> {
-    button(text(label)).padding([12, 24])
-}
+

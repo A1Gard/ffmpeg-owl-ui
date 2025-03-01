@@ -1,8 +1,12 @@
 use std::collections::HashMap;
 use std::sync::RwLock;
+use iced::Font;
+use iced::widget::{ text, Text};
 // use iced::Theme;
 use regex::Regex;
-// use iced::widget::{Text, text};
+
+// use crate::Message;
+
 
 
 lazy_static::lazy_static! {
@@ -57,3 +61,7 @@ fn hex_to_unicode_char(hex_str: Option<&str>) -> Option<char> {
 // pub fn ri_icon_text(icon: &str) -> Text<crate::Message, Theme> {
 //     Text::new(ri_icon(icon)) // Assuming ri_icon returns a String or &str
 // }
+
+pub fn remix_icon<>(label: &str) -> Text<'_> {
+    text(ri_icon(label)).font(Font::with_name("remixicon"))
+}

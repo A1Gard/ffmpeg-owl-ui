@@ -1,14 +1,14 @@
 mod font_installer;
 mod remixicon;
 
+use crate::remixicon::remix_icon;
 use iced::widget::{
     button, column, container, horizontal_space, progress_bar, row, text, Container,
 };
 use iced::Alignment::End;
 use iced::{Center, Fill, Task, Theme};
-use remixicon::{remix_init};
+use remixicon::remix_init;
 use std::io;
-use crate::remixicon::remix_icon;
 
 fn theme(state: &Controller) -> Theme {
     print!("{}", state.value.to_string());
@@ -37,9 +37,10 @@ struct Controller {
     value: i64,
     source: String,
     dest: String,
-    can_logo: bool,
-    logo_input: String,
+    can_image: bool,
+    image_input: String,
     progress: f32,
+    action: String,
 }
 
 #[derive(Debug, Clone)]
@@ -53,13 +54,17 @@ enum Message {
     Resize,
     Subtitle,
     Watermark,
+    Merge,
+    AddCover,
+    TextWatermark,
+    Landscape,
     DoIt,
     SelectInputVideo,
     InputVideoOpened(Result<String, String>),
     SelectOutputVideo,
     OutputVideoOpened(Result<String, String>),
-    SelectLogo,
-    LogoOpened(Result<String, String>),
+    SelectImage,
+    ImageOpened(Result<String, String>),
 }
 
 impl Controller {
@@ -68,34 +73,47 @@ impl Controller {
         (Self::default(), Task::done(start_message))
     }
 
-    fn can_logo(&self) -> bool {
-        self.can_logo
+    fn can_image(&self) -> bool {
+        self.can_image
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
+
         match message {
             Message::Start => {
                 self.source = "-".to_string();
                 self.dest = "-".to_string();
-                self.logo_input = "-".to_string();
-                self.can_logo = false;
+                self.image_input = "-".to_string();
+                self.can_image = false;
+                self.action = "mute".to_string();
                 Task::none()
             }
-            Message::Mute => Task::none(),
+            Message::Mute => {
+                self.action = "mute".to_string();
+                self.can_image = false;
+                Task::none()
+            },
             Message::Rotate => Task::none(),
             Message::ReplaceSound => Task::none(),
             Message::Crop => Task::none(),
             Message::Compress => Task::none(),
             Message::Resize => Task::none(),
             Message::Subtitle => Task::none(),
+            Message::Landscape => Task::none(),
+            Message::Merge => Task::none(),
+            Message::AddCover => Task::none(),
+            Message::TextWatermark => Task::none(),
             Message::Watermark => {
-                self.can_logo = true;
+                self.can_image = true;
                 Task::none()
             }
             Message::DoIt => {
                 self.progress = 15.7;
+                if self.action == "mute" {
+
+                }
                 Task::none()
-            },
+            }
 
             Message::SelectInputVideo => {
                 println!("Select input video");
@@ -126,15 +144,15 @@ impl Controller {
 
                 Task::none()
             }
-            Message::SelectLogo => {
-                println!("Select logo");
+            Message::SelectImage => {
+                println!("Select image");
 
-                Task::perform(open_file(&["png", "jpg"]), Message::LogoOpened)
+                Task::perform(open_file(&["png", "jpg"]), Message::ImageOpened)
             }
-            Message::LogoOpened(result) => {
+            Message::ImageOpened(result) => {
                 match result {
                     Ok(file_path) => {
-                        self.logo_input = file_path;
+                        self.image_input = file_path;
                     }
                     Err(e) => {
                         eprintln!("Error selecting file: {}", e); // Handle the error (optional)
@@ -174,38 +192,40 @@ impl Controller {
     fn view(&self) -> Container<Message> {
         // &self.update(Message::Start);
 
-        let controls = column![].spacing(7)
+        let controls = column![]
+            .spacing(7)
             .push(
                 row![
-                        text("Input video: ").width(200),
-                        button("Choose source").on_press(Message::SelectInputVideo),
-                        container(text(self.source.clone()))
-                            .align_x(End)
-                            .width(Fill)
-                            .padding(7),
-                    ]
-                    .align_y(Center),
-            )
-            .push(
-                row![
-                        text("Output video: ").width(200),
-                        button("Choose destination").on_press(Message::SelectOutputVideo),
-                        container(text(self.dest.clone()))
-                            .align_x(End)
-                            .width(Fill)
-                            .padding(7),
-                    ]
-                    .align_y(Center),
-            )
-            .push_maybe(self.can_logo().then(|| {
-                row![
-                    text("Logo input: ").width(200),
-                    button("Choose logo").on_press(Message::SelectLogo),
-                    container(text(self.logo_input.clone()))
+                    text("Input video: ").width(200),
+                    button("Choose source").on_press(Message::SelectInputVideo),
+                    container(text(self.source.clone()))
                         .align_x(End)
                         .width(Fill)
                         .padding(7),
-                ].align_y(Center)
+                ]
+                .align_y(Center),
+            )
+            .push(
+                row![
+                    text("Output video: ").width(200),
+                    button("Choose destination").on_press(Message::SelectOutputVideo),
+                    container(text(self.dest.clone()))
+                        .align_x(End)
+                        .width(Fill)
+                        .padding(7),
+                ]
+                .align_y(Center),
+            )
+            .push_maybe(self.can_image().then(|| {
+                row![
+                    text("Image input: ").width(200),
+                    button("Choose image").on_press(Message::SelectImage),
+                    container(text(self.image_input.clone()))
+                        .align_x(End)
+                        .width(Fill)
+                        .padding(7),
+                ]
+                .align_y(Center)
             }));
 
         container(column![
@@ -276,7 +296,7 @@ impl Controller {
                                     .size(35)
                                     .width(Fill)
                                     .align_x(Center),
-                                text("Compress video").width(Fill).align_x(Center),
+                                text("Shrink video").width(Fill).align_x(Center),
                             ])
                             .width(Fill)
                             .align_x(Center)
@@ -325,10 +345,70 @@ impl Controller {
                     ]
                     .spacing(15)
                 ),
+                container("").height(15),
+                container(
+                    row![
+                        button(
+                            container(column![
+                                remix_icon("ri-split-cells-horizontal")
+                                    .size(35)
+                                    .width(Fill)
+                                    .align_x(Center),
+                                text("Landscape to portrait").width(Fill).align_x(Center),
+                            ])
+                            .width(Fill)
+                            .align_x(Center)
+                        )
+                        .width(Fill)
+                        .on_press(Message::Landscape),
+                        button(
+                            container(column![
+                                remix_icon("ri-git-merge-line")
+                                    .size(35)
+                                    .width(Fill)
+                                    .align_x(Center),
+                                text("Merge two video").width(Fill).align_x(Center),
+                            ])
+                            .width(Fill)
+                            .align_x(Center)
+                        )
+                        .width(Fill)
+                        .on_press(Message::Merge),
+                        button(
+                            container(column![
+                                remix_icon("ri-image-circle-fill")
+                                    .size(35)
+                                    .width(Fill)
+                                    .align_x(Center),
+                                text("Add cover").width(Fill).align_x(Center),
+                            ])
+                            .width(Fill)
+                            .align_x(Center)
+                        )
+                        .width(Fill)
+                        .on_press(Message::AddCover),
+                        button(
+                            container(column![
+                                remix_icon("ri-text-snippet")
+                                    .size(35)
+                                    .width(Fill)
+                                    .align_x(Center),
+                                text("Text watermark").width(Fill).align_x(Center),
+                            ])
+                            .width(Fill)
+                            .align_x(Center)
+                        )
+                        .width(Fill)
+                        .on_press(Message::TextWatermark),
+                    ]
+                    .spacing(15)
+                ),
             ])
             .padding(15),
             container(
                 column![
+                    horizontal_space(),
+                    container(row![text("Current action:"), text(self.action.clone())].spacing(15)),
                     horizontal_space(),
                     container(controls),
                     horizontal_space(),
@@ -338,12 +418,15 @@ impl Controller {
             )
             .padding(15)
             .height(Fill),
-            container(column![
-                progress_bar(0.0..=100.0, self.progress.clone()),
-                button(container(
-                    text("Do it!")
-                ).width(Fill).align_x(Center)).on_press(Message::DoIt)
-            ].spacing(15)).padding(15)
+            container(
+                column![
+                    progress_bar(0.0..=100.0, self.progress.clone()),
+                    button(container(text("Do it!")).width(Fill).align_x(Center))
+                        .on_press(Message::DoIt)
+                ]
+                .spacing(15)
+            )
+            .padding(15)
         ])
         .width(Fill)
         .center_x(Fill)
@@ -405,5 +488,3 @@ async fn save_file(support_ext: &[impl ToString]) -> Result<String, String> {
 
     Ok(path.to_string())
 }
-
-

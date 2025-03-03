@@ -1,14 +1,15 @@
+mod engine;
 mod font_installer;
 mod remixicon;
 
+use crate::engine::mute;
 use crate::remixicon::remix_icon;
-use iced::widget::{
-    button, column, container, horizontal_space, progress_bar, row, text, Container,
-};
+use iced::widget::{button, column, container, horizontal_space, progress_bar, row, text, Column, Container};
 use iced::Alignment::End;
-use iced::{Center, Fill, Task, Theme};
+use iced::{Center, Element, Fill, Task, Theme, Color, Border};
 use remixicon::remix_init;
 use std::io;
+use std::collections::HashMap;
 
 fn theme(state: &Controller) -> Theme {
     print!("{}", state.value.to_string());
@@ -41,6 +42,7 @@ struct Controller {
     image_input: String,
     progress: f32,
     action: String,
+    toasts: Vec<HashMap<String, String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +67,7 @@ enum Message {
     OutputVideoOpened(Result<String, String>),
     SelectImage,
     ImageOpened(Result<String, String>),
+
 }
 
 impl Controller {
@@ -78,7 +81,6 @@ impl Controller {
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
-
         match message {
             Message::Start => {
                 self.source = "-".to_string();
@@ -86,13 +88,14 @@ impl Controller {
                 self.image_input = "-".to_string();
                 self.can_image = false;
                 self.action = "mute".to_string();
+                self.toasts = vec![];
                 Task::none()
             }
             Message::Mute => {
                 self.action = "mute".to_string();
                 self.can_image = false;
                 Task::none()
-            },
+            }
             Message::Rotate => Task::none(),
             Message::ReplaceSound => Task::none(),
             Message::Crop => Task::none(),
@@ -108,9 +111,50 @@ impl Controller {
                 Task::none()
             }
             Message::DoIt => {
-                self.progress = 15.7;
+                self.toasts = vec![];
+                let mut _is_err = false;
                 if self.action == "mute" {
-
+                    if self.source == "-" {
+                        // self.log = text_editor::Content::with_text(&format!(
+                        //     "{}\nInvalid input",
+                        //     self.log.text().trim()
+                        // ));
+                        self.toasts.push(HashMap::from([
+                            ("message".to_string(), "Invalid input".to_string()),
+                            ("type".to_string(), "error".to_string()),
+                        ]));
+                        _is_err = true;
+                    }
+                    if self.dest == "-" {
+                        self.toasts.push(HashMap::from([
+                            ("message".to_string(), "Invalid output".to_string()),
+                            ("type".to_string(), "error".to_string()),
+                        ]));
+                        _is_err = true;
+                    }
+                    if _is_err {
+                        return  Task::none();
+                    }
+                    match mute(&self.source, &self.dest) {
+                        Ok(_) => {
+                            self.progress = 100.0;
+                            // self.log = text_editor::Content::with_text(&format!(
+                            //     "{}\n",
+                            //     self.log.text().trim()
+                            // ));
+                            self.toasts.push(HashMap::from([
+                                ("message".to_string(), "Successfully muted the audio.".to_string()),
+                                ("type".to_string(), "success".to_string()),
+                            ]));
+                        }
+                        Err(e) => {
+                            self.toasts.push(HashMap::from([
+                                (e.to_string(), "Invalid output".to_string()),
+                                ("type".to_string(), "error".to_string()),
+                            ]));
+                            self.progress = 0.0;
+                        }
+                    }
                 }
                 Task::none()
             }
@@ -185,7 +229,7 @@ impl Controller {
                 }
 
                 Task::none()
-            }
+            },
         }
     }
 
@@ -227,6 +271,33 @@ impl Controller {
                 ]
                 .align_y(Center)
             }));
+
+
+        let toasts  = Column::with_children(
+            self.toasts.iter()
+                .map(|message| {
+                    let mut _bg_color = Color::from_rgb(58.0 / 255.0, 132.0 / 255.0, 0.0); // Default color #3a8400
+
+                    // Check if the "type" key exists and is a string
+                    if let Some(value) = message.get("type") {
+                        if value == "error" {
+                            _bg_color = Color::from_rgb(173.0 / 255.0, 0.0, 0.0); // Error color #ad0000
+                        }
+                    }
+
+
+
+                    let msg_style = iced::widget::container::Style::default()
+                        .background(_bg_color).color(Color::from_rgb(1.0, 1.0, 1.0))
+                        .border(Border::default().rounded(4.0));
+
+                    let message_text = container(text(message.get("message").unwrap()))
+                        .style(move|_theme: &Theme| msg_style.clone())
+                        .padding(7).width(Fill); // Use a closure that returns the style
+
+                    Column::new().push(message_text).push(horizontal_space().height(7))
+                }).map(Element::from),
+        );
 
         container(column![
             container(column![
@@ -422,7 +493,8 @@ impl Controller {
                 column![
                     progress_bar(0.0..=100.0, self.progress.clone()),
                     button(container(text("Do it!")).width(Fill).align_x(Center))
-                        .on_press(Message::DoIt)
+                        .on_press(Message::DoIt),
+                    toasts,
                 ]
                 .spacing(15)
             )

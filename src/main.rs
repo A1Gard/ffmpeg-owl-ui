@@ -19,7 +19,7 @@ fn theme(state: &Controller) -> Theme {
 #[tokio::main]
 pub async fn main() -> iced::Result {
     // install icon font
-    let font_path = "assets/fonts/remixicon.ttf"; // Path to the font file
+    let font_path = "node_modules/remixicon/fonts/remixicon.ttf"; // Path to the font file
     match font_installer::install_font(font_path) {
         Ok(_) => println!("Font installed successfully!"),
         Err(e) => eprintln!("Error installing font: {}", e),

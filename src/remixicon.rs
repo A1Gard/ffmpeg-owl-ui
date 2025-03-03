@@ -14,7 +14,7 @@ lazy_static::lazy_static! {
 }
 
 pub fn remix_init() {
-    let input = include_bytes!("../assets/fonts/remixicon.css");
+    let input = include_bytes!("../node_modules/remixicon/fonts/remixicon.css");
     let input_str = std::str::from_utf8(input).unwrap();
 
     let icon_map = parse_icon_map(input_str);

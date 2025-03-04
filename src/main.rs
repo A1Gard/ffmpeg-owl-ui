@@ -2,13 +2,13 @@ mod engine;
 mod font_installer;
 mod remixicon;
 
-use crate::engine::mute;
+use crate::engine::{mute, rotate};
 use crate::remixicon::remix_icon;
-use iced::widget::{button, column, container, horizontal_space, progress_bar, row, text, Column, Container};
+use iced::widget::{button, column, combo_box, container, horizontal_space, progress_bar, row, text, Column, Container};
 use iced::Alignment::End;
 use iced::{Center, Element, Fill, Task, Theme, Color, Border};
 use remixicon::remix_init;
-use std::io;
+use std::{fmt, io};
 use std::collections::HashMap;
 
 fn theme(state: &Controller) -> Theme {
@@ -33,17 +33,31 @@ pub async fn main() -> iced::Result {
         .run_with(Controller::new)
 }
 
+
+#[derive(Debug, Clone)]
+enum Rotation {
+    CC90VF, // 90 Counterclockwise and Vertical Flip
+    C90, // 90 Clockwise
+    C90VF, //  90 Clockwise and Vertical Flip
+    R180, // 180 deg rotate
+}
+
+
 #[derive(Default)]
 struct Controller {
     value: i64,
     source: String,
     dest: String,
     can_image: bool,
+    can_rotate: bool,
     image_input: String,
     progress: f32,
     action: String,
     toasts: Vec<HashMap<String, String>>,
+    rotates: combo_box::State<Rotation>,
+    selected_rot: Option<Rotation>,
 }
+
 
 #[derive(Debug, Clone)]
 enum Message {
@@ -67,6 +81,7 @@ enum Message {
     OutputVideoOpened(Result<String, String>),
     SelectImage,
     ImageOpened(Result<String, String>),
+    RotateSelected(Rotation),
 
 }
 
@@ -79,24 +94,48 @@ impl Controller {
     fn can_image(&self) -> bool {
         self.can_image
     }
+    fn can_rotate(&self) -> bool {
+        self.can_rotate
+    }
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Start => {
+
                 self.source = "-".to_string();
                 self.dest = "-".to_string();
                 self.image_input = "-".to_string();
                 self.can_image = false;
+                self.can_rotate = false;
                 self.action = "mute".to_string();
                 self.toasts = vec![];
+                self.selected_rot = Some(Rotation::CC90VF);
+                Task::none()
+            }
+            Message::RotateSelected(rot) => {
+                self.selected_rot = Some(rot);
                 Task::none()
             }
             Message::Mute => {
                 self.action = "mute".to_string();
                 self.can_image = false;
+                self.can_rotate = false;
                 Task::none()
             }
-            Message::Rotate => Task::none(),
+            Message::Rotate => {
+                self.action = "rotate".to_string();
+                self.can_image = false;
+                self.can_rotate = true;
+                let rotations: Vec<Rotation> = vec![
+                    Rotation::CC90VF,
+                    Rotation::C90,
+                    Rotation::C90VF,
+                    Rotation::R180,
+                ];
+                self.rotates = combo_box::State::new(rotations);
+
+                Task::none()
+            },
             Message::ReplaceSound => Task::none(),
             Message::Crop => Task::none(),
             Message::Compress => Task::none(),
@@ -113,12 +152,10 @@ impl Controller {
             Message::DoIt => {
                 self.toasts = vec![];
                 let mut _is_err = false;
+
                 if self.action == "mute" {
+                    println!("Mute");
                     if self.source == "-" {
-                        // self.log = text_editor::Content::with_text(&format!(
-                        //     "{}\nInvalid input",
-                        //     self.log.text().trim()
-                        // ));
                         self.toasts.push(HashMap::from([
                             ("message".to_string(), "Invalid input".to_string()),
                             ("type".to_string(), "error".to_string()),
@@ -138,12 +175,45 @@ impl Controller {
                     match mute(&self.source, &self.dest) {
                         Ok(_) => {
                             self.progress = 100.0;
-                            // self.log = text_editor::Content::with_text(&format!(
-                            //     "{}\n",
-                            //     self.log.text().trim()
-                            // ));
                             self.toasts.push(HashMap::from([
                                 ("message".to_string(), "Successfully muted the audio.".to_string()),
+                                ("type".to_string(), "success".to_string()),
+                            ]));
+                        }
+                        Err(e) => {
+                            self.toasts.push(HashMap::from([
+                                (e.to_string(), "Invalid output".to_string()),
+                                ("type".to_string(), "error".to_string()),
+                            ]));
+                            self.progress = 0.0;
+                        }
+                    }
+                }
+                // rotate
+                if self.action == "rotate" {
+                    println!("Rotate");
+                    if self.source == "-" {
+                        self.toasts.push(HashMap::from([
+                            ("message".to_string(), "Invalid input".to_string()),
+                            ("type".to_string(), "error".to_string()),
+                        ]));
+                        _is_err = true;
+                    }
+                    if self.dest == "-" {
+                        self.toasts.push(HashMap::from([
+                            ("message".to_string(), "Invalid output".to_string()),
+                            ("type".to_string(), "error".to_string()),
+                        ]));
+                        _is_err = true;
+                    }
+                    if _is_err {
+                        return  Task::none();
+                    }
+                    match rotate(&self.source, &self.dest,"transpose=1" ) {
+                        Ok(_) => {
+                            self.progress = 100.0;
+                            self.toasts.push(HashMap::from([
+                                ("message".to_string(), "Successfully rotated the video.".to_string()),
                                 ("type".to_string(), "success".to_string()),
                             ]));
                         }
@@ -270,7 +340,21 @@ impl Controller {
                         .padding(7),
                 ]
                 .align_y(Center)
-            }));
+            }))
+            .push_maybe(self.can_rotate().then(|| {
+                row![
+                    text("Rotate: ").width(200),
+                      combo_box(
+                        &self.rotates,
+                        "Select rotation...",
+                        self.selected_rot.as_ref(),
+                        Message::RotateSelected,
+                    ),
+                    text(""),
+                ]
+                .align_y(Center)
+            }))
+            ;
 
 
         let toasts  = Column::with_children(
@@ -560,3 +644,29 @@ async fn save_file(support_ext: &[impl ToString]) -> Result<String, String> {
 
     Ok(path.to_string())
 }
+
+
+// Implementing the Display trait for Rotation
+impl fmt::Display for Rotation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            Rotation::CC90VF => "90 Counterclockwise and Vertical Flip",
+            Rotation::C90 => "90 Clockwise",
+            Rotation::C90VF => "90 Clockwise and Vertical Flip",
+            Rotation::R180 => "180 degrees rotate",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+
+// impl std::fmt::Display for Rotation {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         f.write_str(match self {
+//             Rotation::CC90VF => "90 Counterclockwise and Vertical Flip",
+//             Rotation::C90 => "90 Clockwise",
+//             Rotation::C90VF => "90 Clockwise and Vertical Flip",
+//             Rotation::R180 => "180 degrees rotate",
+//         })
+//     }
+// }
